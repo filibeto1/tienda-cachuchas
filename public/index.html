@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Cachuchas Store | Inicio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .producto-stock {
+            color: #ff6666;
+        }
+        .producto-stock.alto {
+            color: #66ff66;
+        }
+        .tallas-detalle {
+            font-size: 0.85em;
+            color: #00ffcc;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🧢 CACHUCHAS STORE</h1>
+        <p>Encuentra la cachucha perfecta para ti</p>
+    </header>
+
+    <div class="filtros-container">
+        <button class="btn-filtro activo" id="btn-todas">TODAS</button>
+        <div id="filtros-colecciones"></div>
+    </div>
+
+    <div class="productos-grid" id="productos-container">
+        <div class="loading">Cargando cachuchas...</div>
+    </div>
+
+    <script>
+        let productos = [];
+        let colecciones = [];
+        let coleccionActiva = null;
+
+        async function cargarDatos() {
+            try {
+                const [resProductos, resColecciones] = await Promise.all([
+                    fetch('/api/productos'),
+                    fetch('/api/colecciones')
+                ]);
+                productos = await resProductos.json();
+                colecciones = await resColecciones.json();
+                renderizarFiltros();
+                renderizarProductos();
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('productos-container').innerHTML = '<div class="loading">Error al cargar productos</div>';
+            }
+        }
+
+        function renderizarFiltros() {
+            const container = document.getElementById('filtros-colecciones');
+            container.innerHTML = colecciones.map(c => `
+                <button class="btn-filtro" onclick="filtrarPorColeccion(${c.id})">
+                    ${c.nombre}
+                </button>
+            `).join('');
+        }
+
+        window.filtrarPorColeccion = (id) => {
+            coleccionActiva = id;
+            renderizarProductos();
+            document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('activo'));
+            if(event.target) event.target.classList.add('activo');
+            document.getElementById('btn-todas').classList.remove('activo');
+        };
+
+        window.mostrarTodas = () => {
+            coleccionActiva = null;
+            renderizarProductos();
+            document.querySelectorAll('.btn-filtro').forEach(btn => btn.classList.remove('activo'));
+            document.getElementById('btn-todas').classList.add('activo');
+        };
+
+        // Compartir producto individual
+        window.compartirProducto = (productoId, productoNombre) => {
+            const url = `${window.location.origin}/producto.html?id=${productoId}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: productoNombre,
+                    text: `Mira esta increíble cachucha: ${productoNombre}`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert(`✅ Enlace copiado: ${url}`);
+            }
+        };
+
+        function renderizarProductos() {
+            const container = document.getElementById('productos-container');
+            let productosFiltrados = coleccionActiva 
+                ? productos.filter(p => p.coleccionId === coleccionActiva) 
+                : productos;
+            
+            if (productosFiltrados.length === 0) {
+                container.innerHTML = '<div class="loading">No hay productos en esta colección</div>';
+                return;
+            }
+            
+            container.innerHTML = productosFiltrados.map(prod => {
+                const coleccion = colecciones.find(c => c.id === prod.coleccionId);
+                const imagenPrincipal = prod.imagenes && prod.imagenes.length > 0 ? prod.imagenes[0] : '/uploads/placeholder.jpg';
+                
+                // ========== NUEVO: CÁLCULO DE STOCK POR TALLA ==========
+                const tallasStock = prod.tallasStock || {};
+                const stockTotal = Object.values(tallasStock).reduce((a, b) => a + b, 0);
+                const tallasTexto = Object.entries(tallasStock).map(([talla, stock]) => `${talla}: ${stock}`).join(', ');
+                
+                // Determinar clase de stock (verde si hay suficiente)
+                const stockClass = stockTotal > 10 ? 'alto' : '';
+                
+                return `
+                    <div class="producto-card">
+                        <img src="${imagenPrincipal}" alt="${prod.nombre}" class="producto-imagen">
+                        <div class="producto-info">
+                            <div class="producto-nombre">${prod.nombre}</div>
+                            <div class="producto-coleccion">${coleccion?.nombre || 'Sin colección'}</div>
+                            <div class="producto-precio">
+                                $${prod.precio.toLocaleString()} <span>MXN</span>
+                            </div>
+                            
+                            <!-- NUEVO: Detalle de tallas y stock -->
+                            <div class="producto-detalle">
+                                <span class="producto-tallas">📏 Tallas disponibles:</span>
+                                <span class="tallas-detalle">${tallasTexto || 'No disponible'}</span>
+                            </div>
+                            <div class="producto-detalle">
+                                <span class="producto-stock ${stockClass}">📦 Stock total: ${stockTotal} unidades</span>
+                            </div>
+                            
+                            <div class="producto-botones">
+                                <button class="btn-ver" onclick="verProducto(${prod.id})">👁️ Ver detalles</button>
+                                <button class="btn-compartir" onclick="compartirProducto(${prod.id}, '${prod.nombre}')">📤 Compartir</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window.verProducto = (id) => {
+            window.location.href = `/producto.html?id=${id}`;
+        };
+
+        document.getElementById('btn-todas')?.addEventListener('click', mostrarTodas);
+        cargarDatos();
+    </script>
+</body>
+</html>

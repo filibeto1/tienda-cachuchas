@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Gestor Cachuchas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .admin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+        }
+        .preview-imagenes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .preview-imagenes img {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #00ffcc;
+            cursor: pointer;
+        }
+        .producto-admin-item {
+            background: #0a0a0a;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #00ffcc;
+        }
+        .producto-admin-item.editing {
+            border-left-color: #ffaa00;
+            background: #1a1a1a;
+        }
+        .btn-editar {
+            background: #ffaa00;
+            color: #000;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+        .form-edicion {
+            margin-top: 15px;
+            padding: 15px;
+            background: #1a1a2a;
+            border-radius: 12px;
+            display: none;
+        }
+        .form-edicion.active {
+            display: block;
+        }
+        .toast-notificacion {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #00ffcc;
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            z-index: 1000;
+            animation: fadeOut 2s ease forwards;
+        }
+        .campo-tallas-stock {
+            background: #0a0a1a;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .talla-stock-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .talla-stock-row input {
+            flex: 1;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #111;
+            color: #fff;
+        }
+        .talla-stock-row input:first-child {
+            flex: 0.5;
+        }
+        .btn-agregar-talla {
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        .btn-remover-talla {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .stock-total {
+            margin-top: 10px;
+            padding: 8px;
+            background: #00ffcc20;
+            border-radius: 8px;
+            color: #00ffcc;
+            font-weight: bold;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; visibility: hidden; }
+        }
+    </style>
+</head>
+<body class="admin-view">
+    <header>
+        <h1>👑 Panel de Administración</h1>
+        <p>Gestiona tus cachuchas - Stock por talla</p>
+        <a href="index.html" target="_blank" style="color: #00ffcc;">🔗 Ver tienda</a>
+    </header>
+
+    <div class="admin-grid">
+        <div class="admin-section">
+            <h2>📁 Colecciones</h2>
+            <input type="text" id="nombre-coleccion" class="admin-input" placeholder="Nombre de la colección">
+            <button id="btn-crear-coleccion" class="admin-btn">➕ Crear colección</button>
+            <div id="lista-colecciones" style="margin-top: 20px;"></div>
+        </div>
+
+        <div class="admin-section">
+            <h2>🧢 Nueva Cachucha</h2>
+            <select id="coleccion-select" class="admin-select"></select>
+            <input type="text" id="nombre-producto" class="admin-input" placeholder="Nombre del modelo">
+            <input type="file" id="imagenes" multiple accept="image/*" class="admin-input">
+            <small>📸 Sube varias fotos de diferentes ángulos</small>
+            <div id="preview-imagenes" class="preview-imagenes"></div>
+            
+            <input type="number" id="precio" class="admin-input" placeholder="Precio en pesos MXN">
+            
+            <!-- Stock por talla -->
+            <div class="campo-tallas-stock">
+                <label>📏 Stock por talla:</label>
+                <div id="tallas-stock-container">
+                    <div class="talla-stock-row">
+                        <input type="text" placeholder="Talla (ej: 7, S, M)" class="talla-input">
+                        <input type="number" placeholder="Cantidad" class="stock-input" value="0">
+                        <button class="btn-remover-talla" onclick="removerTalla(this)">✖</button>
+                    </div>
+                </div>
+                <button type="button" class="btn-agregar-talla" onclick="agregarCampoTalla()">+ Agregar otra talla</button>
+                <div id="stock-total-nuevo" class="stock-total">📦 Stock total: 0 unidades</div>
+            </div>
+            
+            <button id="btn-guardar-producto" class="admin-btn">💾 Guardar Cachucha</button>
+        </div>
+    </div>
+
+    <div class="admin-section">
+        <h2>📦 Productos en tienda</h2>
+        <div id="productos-lista"></div>
+    </div>
+
+    <script>
+        let colecciones = [];
+        let productos = [];
+        
+        function mostrarNotificacion(mensaje, esError = false) {
+            const toast = document.createElement('div');
+            toast.className = 'toast-notificacion';
+            toast.style.background = esError ? '#ff4444' : '#00ffcc';
+            toast.style.color = esError ? 'white' : '#000';
+            toast.textContent = mensaje;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        function agregarCampoTalla(talla = '', stock = 0) {
+            const container = document.getElementById('tallas-stock-container');
+            const row = document.createElement('div');
+            row.className = 'talla-stock-row';
+            row.innerHTML = `
+                <input type="text" placeholder="Talla (ej: 7, S, M)" class="talla-input" value="${talla}">
+                <input type="number" placeholder="Cantidad" class="stock-input" value="${stock}">
+                <button class="btn-remover-talla" onclick="removerTalla(this)">✖</button>
+            `;
+            container.appendChild(row);
+            actualizarStockTotalNuevo();
+            
+            // Agregar event listeners para actualizar total
+            const inputs = row.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('change', () => actualizarStockTotalNuevo());
+                input.addEventListener('input', () => actualizarStockTotalNuevo());
+            });
+        }
+        
+        function removerTalla(btn) {
+            const row = btn.parentElement;
+            const container = document.getElementById('tallas-stock-container');
+            if (container.children.length > 1) {
+                row.remove();
+                actualizarStockTotalNuevo();
+            } else {
+                mostrarNotificacion('Debe haber al menos una talla', true);
+            }
+        }
+        
+        function actualizarStockTotalNuevo() {
+            const rows = document.querySelectorAll('#tallas-stock-container .talla-stock-row');
+            let total = 0;
+            rows.forEach(row => {
+                const stockInput = row.querySelector('.stock-input');
+                const stock = parseInt(stockInput.value) || 0;
+                total += stock;
+            });
+            document.getElementById('stock-total-nuevo').innerHTML = `📦 Stock total: ${total} unidades`;
+        }
+        
+        function obtenerTallasStockDesdeNuevo() {
+            const rows = document.querySelectorAll('#tallas-stock-container .talla-stock-row');
+            const tallasStock = {};
+            rows.forEach(row => {
+                const talla = row.querySelector('.talla-input').value.trim();
+                const stock = parseInt(row.querySelector('.stock-input').value) || 0;
+                if (talla !== '') {
+                    tallasStock[talla] = stock;
+                }
+            });
+            return tallasStock;
+        }
+        
+        function cargarTallasStockEnEdicion(containerId, tallasStock) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            if (Object.keys(tallasStock).length === 0) {
+                const row = document.createElement('div');
+                row.className = 'talla-stock-row';
+                row.innerHTML = `
+                    <input type="text" placeholder="Talla (ej: 7, S, M)" class="talla-input" value="">
+                    <input type="number" placeholder="Cantidad" class="stock-input" value="0">
+                    <button class="btn-remover-talla" onclick="removerTallaEdicion(this, '${containerId}')">✖</button>
+                `;
+                container.appendChild(row);
+            } else {
+                for (const [talla, stock] of Object.entries(tallasStock)) {
+                    const row = document.createElement('div');
+                    row.className = 'talla-stock-row';
+                    row.innerHTML = `
+                        <input type="text" placeholder="Talla" class="talla-input" value="${talla}">
+                        <input type="number" placeholder="Cantidad" class="stock-input" value="${stock}">
+                        <button class="btn-remover-talla" onclick="removerTallaEdicion(this, '${containerId}')">✖</button>
+                    `;
+                    container.appendChild(row);
+                }
+            }
+            actualizarStockTotalEdicion(containerId);
+            
+            // Agregar event listeners
+            const inputs = container.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('change', () => actualizarStockTotalEdicion(containerId));
+                input.addEventListener('input', () => actualizarStockTotalEdicion(containerId));
+            });
+        }
+        
+        function removerTallaEdicion(btn, containerId) {
+            const row = btn.parentElement;
+            const container = document.getElementById(containerId);
+            if (container.children.length > 1) {
+                row.remove();
+                actualizarStockTotalEdicion(containerId);
+            } else {
+                mostrarNotificacion('Debe haber al menos una talla', true);
+            }
+        }
+        
+        function agregarCampoTallaEdicion(containerId) {
+            const container = document.getElementById(containerId);
+            const row = document.createElement('div');
+            row.className = 'talla-stock-row';
+            row.innerHTML = `
+                <input type="text" placeholder="Talla (ej: 7, S, M)" class="talla-input" value="">
+                <input type="number" placeholder="Cantidad" class="stock-input" value="0">
+                <button class="btn-remover-talla" onclick="removerTallaEdicion(this, '${containerId}')">✖</button>
+            `;
+            container.appendChild(row);
+            actualizarStockTotalEdicion(containerId);
+            
+            const inputs = row.querySelectorAll('input');
+            inputs.forEach(input => {
+                input.addEventListener('change', () => actualizarStockTotalEdicion(containerId));
+                input.addEventListener('input', () => actualizarStockTotalEdicion(containerId));
+            });
+        }
+        
+        function actualizarStockTotalEdicion(containerId) {
+            const container = document.getElementById(containerId);
+            const rows = container.querySelectorAll('.talla-stock-row');
+            let total = 0;
+            rows.forEach(row => {
+                const stockInput = row.querySelector('.stock-input');
+                const stock = parseInt(stockInput.value) || 0;
+                total += stock;
+            });
+            const totalSpan = document.getElementById(`stock-total-edit-${containerId.split('-').pop()}`);
+            if (totalSpan) {
+                totalSpan.innerHTML = `📦 Stock total: ${total} unidades`;
+            }
+        }
+        
+        function obtenerTallasStockDesdeEdicion(containerId) {
+            const container = document.getElementById(containerId);
+            const rows = container.querySelectorAll('.talla-stock-row');
+            const tallasStock = {};
+            rows.forEach(row => {
+                const talla = row.querySelector('.talla-input').value.trim();
+                const stock = parseInt(row.querySelector('.stock-input').value) || 0;
+                if (talla !== '') {
+                    tallasStock[talla] = stock;
+                }
+            });
+            return tallasStock;
+        }
+        
+        document.getElementById('imagenes')?.addEventListener('change', function(e) {
+            const preview = document.getElementById('preview-imagenes');
+            preview.innerHTML = '';
+            Array.from(e.target.files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    preview.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        });
+        
+        async function cargarColecciones() {
+            const res = await fetch('/api/colecciones');
+            colecciones = await res.json();
+            const select = document.getElementById('coleccion-select');
+            select.innerHTML = '<option value="">Seleccionar colección</option>' + 
+                colecciones.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+            
+            const lista = document.getElementById('lista-colecciones');
+            lista.innerHTML = colecciones.map(c => `
+                <div class="producto-admin-item">
+                    <strong>${c.nombre}</strong>
+                    <button onclick="eliminarColeccion(${c.id})" class="admin-btn admin-btn-danger" style="float:right;">Eliminar</button>
+                </div>
+            `).join('');
+        }
+        
+        async function cargarProductos() {
+            const res = await fetch('/api/productos');
+            productos = await res.json();
+            const container = document.getElementById('productos-lista');
+            container.innerHTML = productos.map(p => {
+                const coleccion = colecciones.find(c => c.id === p.coleccionId);
+                const tallasStock = p.tallasStock || {};
+                const stockTotal = Object.values(tallasStock).reduce((a, b) => a + b, 0);
+                return `
+                    <div class="producto-admin-item" id="producto-${p.id}">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                            <div style="flex: 1;">
+                                <strong>${p.nombre}</strong><br>
+                                <small>${coleccion?.nombre || 'Sin colección'}</small><br>
+                                💰 $${p.precio.toLocaleString()} MXN<br>
+                                📏 Tallas: ${Object.keys(tallasStock).join(', ') || 'Ninguna'}<br>
+                                📦 Stock total: ${stockTotal} unidades
+                            </div>
+                            <div>
+                                <button onclick="editarProducto(${p.id})" class="btn-editar">✏️ Editar</button>
+                                <button onclick="eliminarProducto(${p.id})" class="admin-btn admin-btn-danger">❌ Eliminar</button>
+                            </div>
+                        </div>
+                        <div id="edit-form-${p.id}" class="form-edicion">
+                            <h4>✏️ Editando: ${p.nombre}</h4>
+                            <select id="edit-coleccion-${p.id}" class="admin-select">
+                                ${colecciones.map(c => `<option value="${c.id}" ${c.id === p.coleccionId ? 'selected' : ''}>${c.nombre}</option>`).join('')}
+                            </select>
+                            <input type="text" id="edit-nombre-${p.id}" class="admin-input" value="${p.nombre.replace(/'/g, "\\'")}">
+                            <input type="number" id="edit-precio-${p.id}" class="admin-input" value="${p.precio}">
+                            
+                            <div class="campo-tallas-stock">
+                                <label>📏 Stock por talla:</label>
+                                <div id="edit-tallas-container-${p.id}"></div>
+                                <button type="button" class="btn-agregar-talla" onclick="agregarCampoTallaEdicion('edit-tallas-container-${p.id}')">+ Agregar otra talla</button>
+                                <div id="stock-total-edit-${p.id}" class="stock-total">📦 Stock total: ${stockTotal} unidades</div>
+                            </div>
+                            
+                            <div class="imagenes-existentes">
+                                <strong>Imágenes actuales:</strong>
+                                ${p.imagenes.map((img, idx) => `
+                                    <div class="imagen-existente">
+                                        <img src="${img}">
+                                        <button class="btn-remover-img" onclick="removerImagen(${p.id}, ${idx})">✖</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            
+                            <input type="file" id="edit-imagenes-${p.id}" multiple accept="image/*">
+                            <div id="edit-preview-${p.id}" class="preview-imagenes"></div>
+                            
+                            <div style="margin-top: 15px;">
+                                <button onclick="guardarEdicion(${p.id})" class="admin-btn btn-guardar-edicion">💾 Guardar cambios</button>
+                                <button onclick="cancelarEdicion(${p.id})" class="admin-btn btn-cancelar-edicion">❌ Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        window.editarProducto = (id) => {
+            document.querySelectorAll('.form-edicion').forEach(form => form.classList.remove('active'));
+            document.querySelectorAll('.producto-admin-item').forEach(item => item.classList.remove('editing'));
+            
+            const form = document.getElementById(`edit-form-${id}`);
+            if (form) {
+                form.classList.add('active');
+                document.getElementById(`producto-${id}`).classList.add('editing');
+                
+                const producto = productos.find(p => p.id === id);
+                if (producto && producto.tallasStock) {
+                    cargarTallasStockEnEdicion(`edit-tallas-container-${id}`, producto.tallasStock);
+                }
+                
+                const inputImagenes = document.getElementById(`edit-imagenes-${id}`);
+                if (inputImagenes) {
+                    inputImagenes.onchange = function(e) {
+                        const preview = document.getElementById(`edit-preview-${id}`);
+                        preview.innerHTML = '';
+                        Array.from(e.target.files).forEach(file => {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                const img = document.createElement('img');
+                                img.src = event.target.result;
+                                preview.appendChild(img);
+                            };
+                            reader.readAsDataURL(file);
+                        });
+                    };
+                }
+            }
+        };
+        
+        window.cancelarEdicion = (id) => {
+            const form = document.getElementById(`edit-form-${id}`);
+            if (form) form.classList.remove('active');
+            const parent = document.getElementById(`producto-${id}`);
+            if (parent) parent.classList.remove('editing');
+            mostrarNotificacion('Edición cancelada');
+        };
+        
+        window.removerImagen = async (productoId, imagenIndex) => {
+            const producto = productos.find(p => p.id === productoId);
+            if (!producto) return;
+            producto.imagenes.splice(imagenIndex, 1);
+            const res = await fetch(`/api/productos/${productoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(producto)
+            });
+            if (res.ok) {
+                mostrarNotificacion('✅ Imagen eliminada');
+                await cargarProductos();
+                setTimeout(() => editarProducto(productoId), 100);
+            }
+        };
+        
+        window.guardarEdicion = async (id) => {
+            const productoOriginal = productos.find(p => p.id === id);
+            const nuevaColeccionId = parseInt(document.getElementById(`edit-coleccion-${id}`).value);
+            const nuevoNombre = document.getElementById(`edit-nombre-${id}`).value;
+            const nuevoPrecio = parseFloat(document.getElementById(`edit-precio-${id}`).value);
+            const tallasStock = obtenerTallasStockDesdeEdicion(`edit-tallas-container-${id}`);
+            
+            if (!nuevoNombre || isNaN(nuevoPrecio) || Object.keys(tallasStock).length === 0) {
+                mostrarNotificacion('❌ Completa todos los campos y al menos una talla', true);
+                return;
+            }
+            
+            let imagenesActualizadas = [...productoOriginal.imagenes];
+            const nuevasImagenes = document.getElementById(`edit-imagenes-${id}`).files;
+            
+            if (nuevasImagenes.length > 0) {
+                const formData = new FormData();
+                for(let i = 0; i < nuevasImagenes.length; i++) {
+                    formData.append('imagenes', nuevasImagenes[i]);
+                }
+                const resUpload = await fetch('/api/upload-imagenes', { method: 'POST', body: formData });
+                if (resUpload.ok) {
+                    const data = await resUpload.json();
+                    imagenesActualizadas = [...imagenesActualizadas, ...data.imagenes];
+                }
+            }
+            
+            const productoActualizado = {
+                id: id,
+                coleccionId: nuevaColeccionId,
+                nombre: nuevoNombre,
+                precio: nuevoPrecio,
+                tallasStock: tallasStock,
+                imagenes: imagenesActualizadas
+            };
+            
+            const res = await fetch(`/api/productos/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(productoActualizado)
+            });
+            
+            if (res.ok) {
+                mostrarNotificacion('✅ Producto actualizado');
+                cancelarEdicion(id);
+                await cargarProductos();
+            }
+        };
+        
+        document.getElementById('btn-crear-coleccion').onclick = async () => {
+            const nombre = document.getElementById('nombre-coleccion').value;
+            if(!nombre) return mostrarNotificacion('❌ Escribe un nombre', true);
+            await fetch('/api/colecciones', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre })
+            });
+            document.getElementById('nombre-coleccion').value = '';
+            cargarColecciones();
+            mostrarNotificacion('✅ Colección creada');
+        };
+        
+        window.eliminarColeccion = async (id) => {
+            if(confirm('¿Eliminar esta colección?')) {
+                await fetch(`/api/colecciones/${id}`, { method: 'DELETE' });
+                cargarColecciones();
+                cargarProductos();
+            }
+        };
+        
+        document.getElementById('btn-guardar-producto').onclick = async () => {
+            const coleccionId = document.getElementById('coleccion-select').value;
+            const nombre = document.getElementById('nombre-producto').value;
+            const precio = document.getElementById('precio').value;
+            const imagenes = document.getElementById('imagenes').files;
+            const tallasStock = obtenerTallasStockDesdeNuevo();
+            
+            if(!coleccionId || !nombre || !precio || imagenes.length === 0 || Object.keys(tallasStock).length === 0) {
+                return mostrarNotificacion('❌ Completa todos los campos, sube imágenes y al menos una talla', true);
+            }
+            
+            const formData = new FormData();
+            formData.append('coleccionId', coleccionId);
+            formData.append('nombre', nombre);
+            formData.append('precio', precio);
+            formData.append('tallasStock', JSON.stringify(tallasStock));
+            for(let i = 0; i < imagenes.length; i++) {
+                formData.append('imagenes', imagenes[i]);
+            }
+            
+            const res = await fetch('/api/productos', { method: 'POST', body: formData });
+            if(res.ok) {
+                mostrarNotificacion('✅ Cachucha guardada');
+                document.getElementById('nombre-producto').value = '';
+                document.getElementById('precio').value = '';
+                document.getElementById('imagenes').value = '';
+                document.getElementById('preview-imagenes').innerHTML = '';
+                document.getElementById('tallas-stock-container').innerHTML = `
+                    <div class="talla-stock-row">
+                        <input type="text" placeholder="Talla (ej: 7, S, M)" class="talla-input">
+                        <input type="number" placeholder="Cantidad" class="stock-input" value="0">
+                        <button class="btn-remover-talla" onclick="removerTalla(this)">✖</button>
+                    </div>
+                `;
+                actualizarStockTotalNuevo();
+                cargarProductos();
+            }
+        };
+        
+        window.eliminarProducto = async (id) => {
+            if(confirm('¿Eliminar este producto?')) {
+                await fetch(`/api/productos/${id}`, { method: 'DELETE' });
+                cargarProductos();
+            }
+        };
+        
+        cargarColecciones();
+        cargarProductos();
+    </script>
+</body>
+</html>

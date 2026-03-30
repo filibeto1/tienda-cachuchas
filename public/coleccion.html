@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colección de Cachuchas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <button class="btn-volver" onclick="window.location.href='/index.html'" style="background: #333; color: white; padding: 10px 20px; border: none; border-radius: 10px; cursor: pointer; margin: 20px;">
+        ← Volver a la tienda
+    </button>
+    
+    <div id="contenido">
+        <div class="loading">Cargando colección...</div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const coleccionId = urlParams.get('id');
+
+        async function cargarColeccion() {
+            if (!coleccionId) {
+                document.getElementById('contenido').innerHTML = '<div class="loading">No se especificó ninguna colección</div>';
+                return;
+            }
+
+            try {
+                const [resProductos, resColecciones] = await Promise.all([
+                    fetch('/api/productos'),
+                    fetch('/api/colecciones')
+                ]);
+                const productos = await resProductos.json();
+                const colecciones = await resColecciones.json();
+                const coleccion = colecciones.find(c => c.id == coleccionId);
+                
+                if (!coleccion) {
+                    document.getElementById('contenido').innerHTML = '<div class="loading">Colección no encontrada</div>';
+                    return;
+                }
+
+                const productosColeccion = productos.filter(p => p.coleccionId == coleccionId);
+                
+                document.getElementById('contenido').innerHTML = `
+                    <header style="text-align: center;">
+                        <h1>📁 Colección: ${coleccion.nombre}</h1>
+                        <button class="btn-compartir-coleccion" onclick="compartirEstaColeccion()" style="margin: 20px auto; display: inline-block; padding: 12px 30px;">
+                            📤 Compartir esta colección completa
+                        </button>
+                    </header>
+                    <div class="productos-grid" id="productos-coleccion">
+                        ${productosColeccion.map(prod => {
+                            const imagenPrincipal = prod.imagenes && prod.imagenes.length > 0 ? prod.imagenes[0] : '/uploads/placeholder.jpg';
+                            const stockClass = prod.cantidad > 10 ? 'alto' : '';
+                            return `
+                                <div class="producto-card">
+                                    <img src="${imagenPrincipal}" alt="${prod.nombre}" class="producto-imagen">
+                                    <div class="producto-info">
+                                        <div class="producto-nombre">${prod.nombre}</div>
+                                        <div class="producto-precio">
+                                            $${prod.precio.toLocaleString()} <span>MXN</span>
+                                        </div>
+                                        <div class="producto-detalle">
+                                            <span class="producto-tallas">📏 ${prod.tallas}</span>
+                                            <span class="producto-stock ${stockClass}">📦 ${prod.cantidad}</span>
+                                        </div>
+                                        <div class="producto-botones">
+                                            <button class="btn-ver" onclick="verProducto(${prod.id})">👁️ Ver detalles</button>
+                                            <button class="btn-compartir" onclick="compartirProducto(${prod.id}, '${prod.nombre}')">📤 Compartir</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+                
+                if (productosColeccion.length === 0) {
+                    document.getElementById('productos-coleccion').innerHTML = '<div class="loading">No hay productos en esta colección</div>';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('contenido').innerHTML = '<div class="loading">Error al cargar la colección</div>';
+            }
+        }
+
+        window.compartirEstaColeccion = () => {
+            const url = window.location.href;
+            if (navigator.share) {
+                navigator.share({ 
+                    title: 'Colección de cachuchas', 
+                    text: '¡Mira todas estas cachuchas!',
+                    url: url 
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert('✅ Enlace de la colección COMPLETA copiado al portapapeles');
+            }
+        };
+
+        window.compartirProducto = (productoId, productoNombre) => {
+            const url = `${window.location.origin}/producto.html?id=${productoId}`;
+            if (navigator.share) {
+                navigator.share({
+                    title: productoNombre,
+                    text: `Mira esta cachucha: ${productoNombre}`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert(`✅ Enlace copiado: ${url}`);
+            }
+        };
+
+        window.verProducto = (id) => {
+            window.location.href = `/producto.html?id=${id}`;
+        };
+
+        cargarColeccion();
+    </script>
+</body>
+</html>

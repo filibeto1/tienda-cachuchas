@@ -1,0 +1,18 @@
+# Dependencias de Node.js
+node_modules/
+
+# Archivos de datos locales
+data/
+uploads/
+
+# Archivos del sistema (Mac y Windows)
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración de editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*

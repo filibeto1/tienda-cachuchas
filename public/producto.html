@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle de Cachucha</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .producto-detalle-container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            background: rgba(15, 15, 15, 0.8);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .producto-imagen-principal {
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .galeria-imagenes {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .galeria-imagenes img {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 10px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: 0.3s;
+        }
+        .galeria-imagenes img:hover {
+            border-color: #00ffcc;
+            transform: scale(1.05);
+        }
+        .producto-info-detalle {
+            padding: 20px;
+        }
+        .btn-volver {
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 20px;
+        }
+        .btn-volver:hover {
+            background: #00ffcc;
+            color: #000;
+        }
+        .botones-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        .btn-compartir-producto {
+            background: linear-gradient(135deg, #00ffcc, #0099aa);
+            color: #000;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-compartir-coleccion {
+            background: linear-gradient(135deg, #ff00cc, #990099);
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .btn-compartir-producto:hover, .btn-compartir-coleccion:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .tallas-lista {
+            background: #0a0a1a;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .talla-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #333;
+        }
+        .talla-item:last-child {
+            border-bottom: none;
+        }
+        .talla-nombre {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+        .talla-stock {
+            color: #ffaa00;
+        }
+        @media (max-width: 768px) {
+            .producto-detalle-container {
+                grid-template-columns: 1fr;
+            }
+            .botones-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="btn-volver" onclick="window.location.href='/index.html'">← Volver a la tienda</button>
+    
+    <div id="contenido">
+        <div class="loading">Cargando detalles...</div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const productoId = urlParams.get('id');
+
+        async function cargarProducto() {
+            if (!productoId) {
+                document.getElementById('contenido').innerHTML = '<div class="loading">No se especificó ningún producto</div>';
+                return;
+            }
+
+            try {
+                const [resProductos, resColecciones] = await Promise.all([
+                    fetch('/api/productos'),
+                    fetch('/api/colecciones')
+                ]);
+                const productos = await resProductos.json();
+                const colecciones = await resColecciones.json();
+                const producto = productos.find(p => p.id == productoId);
+                
+                if (!producto) {
+                    document.getElementById('contenido').innerHTML = '<div class="loading">Producto no encontrado</div>';
+                    return;
+                }
+
+                const coleccion = colecciones.find(c => c.id === producto.coleccionId);
+                const imagenPrincipal = producto.imagenes && producto.imagenes.length > 0 ? producto.imagenes[0] : '/uploads/placeholder.jpg';
+                
+                // ========== NUEVO: CÁLCULO DE STOCK POR TALLA ==========
+                const tallasStock = producto.tallasStock || {};
+                const stockTotal = Object.values(tallasStock).reduce((a, b) => a + b, 0);
+                
+                // Generar lista de tallas con stock
+                const tallasLista = Object.entries(tallasStock).map(([talla, stock]) => `
+                    <div class="talla-item">
+                        <span class="talla-nombre">📏 Talla ${talla}</span>
+                        <span class="talla-stock">${stock} unidades disponibles</span>
+                    </div>
+                `).join('');
+                
+                document.getElementById('contenido').innerHTML = `
+                    <div class="producto-detalle-container">
+                        <div>
+                            <img src="${imagenPrincipal}" alt="${producto.nombre}" class="producto-imagen-principal" id="imagenPrincipal">
+                            <div class="galeria-imagenes" id="galeria">
+                                ${producto.imagenes.map(img => `<img src="${img}" alt="Vista" onclick="cambiarImagen('${img}')">`).join('')}
+                            </div>
+                        </div>
+                        <div class="producto-info-detalle">
+                            <div class="producto-nombre" style="font-size: 2em;">${producto.nombre}</div>
+                            <div class="producto-coleccion" style="font-size: 1.2em; margin: 10px 0;">🎨 ${coleccion?.nombre || 'Sin colección'}</div>
+                            <div class="producto-precio" style="font-size: 2.5em; margin: 20px 0;">
+                                $${producto.precio.toLocaleString()} <span>MXN</span>
+                            </div>
+                            
+                            <!-- NUEVO: Lista detallada de tallas y stock -->
+                            <div class="tallas-lista">
+                                <h3 style="color: #00ffcc; margin-bottom: 15px;">📏 Stock por talla</h3>
+                                ${tallasLista || '<p>No hay tallas disponibles</p>'}
+                                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+                                    <strong>📦 Stock total: ${stockTotal} unidades</strong>
+                                </div>
+                            </div>
+                            
+                            <div class="botones-container">
+                                <button class="btn-compartir-producto" onclick="compartirProducto()">
+                                    📤 Compartir este producto
+                                </button>
+                                <button class="btn-compartir-coleccion" onclick="compartirColeccionCompleta(${producto.coleccionId}, '${coleccion?.nombre}')">
+                                    📁 Compartir toda la colección "${coleccion?.nombre}"
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('contenido').innerHTML = '<div class="loading">Error al cargar el producto</div>';
+            }
+        }
+
+        window.cambiarImagen = (url) => {
+            document.getElementById('imagenPrincipal').src = url;
+        };
+
+        window.compartirProducto = () => {
+            const url = window.location.href;
+            if (navigator.share) {
+                navigator.share({ title: 'Cachucha', url: url });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert('✅ Enlace del producto copiado al portapapeles');
+            }
+        };
+
+        window.compartirColeccionCompleta = (coleccionId, coleccionNombre) => {
+            const url = `${window.location.origin}/coleccion.html?id=${coleccionId}`;
+            if (navigator.share) {
+                navigator.share({
+                    title: `Colección: ${coleccionNombre}`,
+                    text: `Mira toda la colección ${coleccionNombre} de cachuchas`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                alert(`✅ Enlace de la colección COMPLETA "${coleccionNombre}" copiado\n\n${url}`);
+            }
+        };
+
+        cargarProducto();
+    </script>
+</body>
+</html>
